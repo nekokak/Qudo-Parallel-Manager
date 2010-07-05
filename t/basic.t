@@ -49,6 +49,7 @@ if ( fork ) {
     ) or die 'can not connect admin port.';
 
     my $status = $sock->getline;
+    diag($status);
     ok $status;
     $sock->close;
 

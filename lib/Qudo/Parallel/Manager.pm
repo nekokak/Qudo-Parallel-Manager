@@ -11,24 +11,24 @@ our $VERSION = '0.01';
 sub new {
     my ($class, %args) = @_;
 
-    my $max_request_par_chiled = delete $args{max_request_par_chiled} || 30;
-    my $max_workers            = delete $args{max_workers} || 1;
-    my $min_spare_workers      = delete $args{min_spare_workers} || 30;
-    my $max_spare_workers      = delete $args{max_spare_workers} || $max_workers;
-    my $auto_load_worker       = delete $args{auto_load_worker} || 1;
-    my $debug                  = delete $args{debug} || 0;
+    my $max_request_par_child = delete $args{max_request_par_child} || 30;
+    my $max_workers           = delete $args{max_workers}           || 1;
+    my $min_spare_workers     = delete $args{min_spare_workers}     || 1;
+    my $max_spare_workers     = delete $args{max_spare_workers}     || $max_workers;
+    my $auto_load_worker      = delete $args{auto_load_worker}      || 1;
+    my $debug                 = delete $args{debug}                 || 0;
 
     my $qudo = Qudo->new(%args);
 
     $qudo->manager->register_hooks(qw/Qudo::Hook::Scoreboard/);
 
     my $self = bless {
-        max_workers            => $max_workers,
-        max_request_par_chiled => $max_request_par_chiled,
-        min_spare_workers      => $min_spare_workers,
-        max_spare_workers      => $max_spare_workers,
-        debug                  => $debug,
-        qudo                   => $qudo,
+        max_workers           => $max_workers,
+        max_request_par_child => $max_request_par_child,
+        min_spare_workers     => $min_spare_workers,
+        max_spare_workers     => $max_spare_workers,
+        debug                 => $debug,
+        qudo                  => $qudo,
     }, $class;
 
     if ($auto_load_worker) {
@@ -68,7 +68,7 @@ sub run {
                     $db->reconnect;
                 }
 
-                my $reqs_before_exit = $self->{max_request_par_chiled};
+                my $reqs_before_exit = $self->{max_request_par_child};
 
                 $SIG{TERM} = sub { $reqs_before_exit = 0 };
 
@@ -84,6 +84,8 @@ sub run {
         }
 
         $pm->wait_all_children;
+
+        kill 'KILL', $c_pid;
     } else {
 
         my $admin = IO::Socket::INET->new(
@@ -92,6 +94,8 @@ sub run {
             LocalPort => 90000,
             Proto     => 'tcp',
             Type      => SOCK_STREAM,
+            ReuseAddr => 1,
+            ReusePort => 1,
         ) or die "Cannot open server socket: $!";
 
         while (my $remote = $admin->accept) {
@@ -100,8 +104,6 @@ sub run {
             $remote->close;
         }
     }
-
-    kill 'HUP', $c_pid;
 }
 
 sub pm {
@@ -152,6 +154,7 @@ Qudo::Parallel::Manager - auto control forking manager process.
       auto_load_worker       => 1,
       debug                  => 1,
   );
+  $manager->run; # start fork and work.
 
 =head1 DESCRIPTION
 
