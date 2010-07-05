@@ -156,15 +156,35 @@ Qudo::Parallel::Manager - auto control forking manager process.
   );
   $manager->run; # start fork and work.
 
+  # other process. get worker scoreborad.
+  use IO::Socket::INET;
+  my $sock = IO::Socket::INET->new(
+      PeerHost => '127.0.0.1',
+      PeerPort => 90000,
+      Proto    => 'tcp',
+  ) or die 'can not connect admin port.';
+
+  # get scoreborad
+  # ex) _ . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  my $status = $sock->getline;
+  $sock->close;
+
 =head1 DESCRIPTION
 
-Qudo::Parallel::Manager is
+Qudo::Parallel::Manager is auto control forking manager process.
+and get worker scoreborad.
 
 =head1 AUTHOR
 
 Atsushi Kobayashi E<lt>nekokak _at_ gmail _dot_ comE<gt>
 
 =head1 SEE ALSO
+
+L<Qudo>
+
+L<Parallel::Prefork::SpareWorkers>
+
+L<IO::Socket::INET>
 
 =head1 LICENSE
 
