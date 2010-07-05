@@ -115,7 +115,6 @@ sub pm {
             max_workers       => $self->{max_workers},
             min_spare_workers => $self->{min_spare_workers},
             max_spare_workers => $self->{max_spare_workers},
-            fork_delay        => 1,
             trap_signals      => {
                 TERM => 'TERM',
                 HUP  => 'TERM',
