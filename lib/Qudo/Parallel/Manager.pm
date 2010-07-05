@@ -3,23 +3,30 @@ use strict;
 use warnings;
 use Qudo;
 use UNIVERSAL::require;
-use Parallel::Prefork;
+use Parallel::Prefork::SpareWorkers qw(:status);
+use IO::Socket;
 
 our $VERSION = '0.01';
 
 sub new {
     my ($class, %args) = @_;
 
-    my $max_workers            = delete $args{max_workers} || 1;
     my $max_request_par_chiled = delete $args{max_request_par_chiled} || 30;
+    my $max_workers            = delete $args{max_workers} || 1;
+    my $min_spare_workers      = delete $args{min_spare_workers} || 30;
+    my $max_spare_workers      = delete $args{max_spare_workers} || $max_workers;
     my $auto_load_worker       = delete $args{auto_load_worker} || 1;
     my $debug                  = delete $args{debug} || 0;
 
     my $qudo = Qudo->new(%args);
 
+    $qudo->manager->register_hooks(qw/Qudo::Hook::Scoreboard/);
+
     my $self = bless {
         max_workers            => $max_workers,
         max_request_par_chiled => $max_request_par_chiled,
+        min_spare_workers      => $min_spare_workers,
+        max_spare_workers      => $max_spare_workers,
         debug                  => $debug,
         qudo                   => $qudo,
     }, $class;
@@ -44,38 +51,82 @@ sub run {
 
     $self->debug("START WORKING : $$\n");
 
-    my $pm = Parallel::Prefork->new({
-        max_workers  => $self->{max_workers},
-        fork_delay   => 1,
-        trap_signals => {
-            TERM => 'TERM',
-            HUP  => 'TERM',
-        },
-    });
+    my $pm = $self->pm;
 
-    while ($pm->signal_received ne 'TERM') {
-        $pm->start and next;
+    my $c_pid;
+    if ($c_pid = fork) {
 
-        $self->debug("spawn $$\n");
+        while ($pm->signal_received ne 'TERM') {
+            $pm->start and next;
 
-        {
-            my $manager = $self->{qudo}->manager;
-            my $reqs_before_exit = $self->{max_request_par_chiled};
+            $self->debug("spawn $$\n");
 
-            $SIG{TERM} = sub { $reqs_before_exit = 0 };
+            {
+                my $manager = $self->{qudo}->manager;
+                for my $dsn ($manager->shuffled_databases) {
+                    my $db = $manager->driver_for($dsn);
+                    $db->reconnect;
+                }
 
-            while ($reqs_before_exit > 0) {
-                if ($manager->work_once) {
-                    --$reqs_before_exit
+                my $reqs_before_exit = $self->{max_request_par_chiled};
+
+                $SIG{TERM} = sub { $reqs_before_exit = 0 };
+
+                while ($reqs_before_exit > 0) {
+                    if ($manager->work_once) {
+                        --$reqs_before_exit
+                    }
                 }
             }
+
+            $self->debug("FINISHED $$\n");
+            $pm->finish;
         }
 
-        $self->debug("FINISHED $$\n");
-        $pm->finish;
+        $pm->wait_all_children;
+    } else {
+
+        my $admin = IO::Socket::INET->new(
+            Listen    => 5,
+            LocalAddr => '127.0.0.1',
+            LocalPort => 90000,
+            Proto     => 'tcp',
+            Type      => SOCK_STREAM,
+        ) or die "Cannot open server socket: $!";
+
+        while (my $remote = $admin->accept) {
+            my $status = join ' ', $pm->scoreboard->get_statuses;
+            $remote->print($status);
+            $remote->close;
+        }
     }
 
-    $pm->wait_all_children;
+    kill 'HUP', $c_pid;
+}
+
+sub pm {
+    my $self = shift;
+
+    $self->{pm} ||= do {
+
+        my $pm = Parallel::Prefork::SpareWorkers->new({
+            max_workers       => $self->{max_workers},
+            min_spare_workers => $self->{min_spare_workers},
+            max_spare_workers => $self->{max_spare_workers},
+            fork_delay        => 1,
+            trap_signals      => {
+                TERM => 'TERM',
+                HUP  => 'TERM',
+            },
+        });
+
+        {
+            no strict 'refs'; ## no critic.
+            *{"Qudo::Parallel::Manager::Registrar::pm"} = sub { $pm }
+        }
+
+        $pm;
+    };
 }
 
 1;
@@ -95,6 +146,8 @@ Qudo::Parallel::Manager - auto control forking manager process.
           password => '',
       }],
       max_workers            => 5,
+      min_spare_workers      => 1,
+      max_spare_workers      => 5,
       max_request_par_chiled => 30,
       auto_load_worker       => 1,
       debug                  => 1,
