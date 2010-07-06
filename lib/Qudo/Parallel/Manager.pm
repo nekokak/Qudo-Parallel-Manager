@@ -4,6 +4,7 @@ use warnings;
 use Qudo;
 use UNIVERSAL::require;
 use Parallel::Prefork::SpareWorkers qw(:status);
+use Sub::Throttle qw/throttle/;
 use IO::Socket;
 
 our $VERSION = '0.01';
@@ -16,6 +17,7 @@ sub new {
     my $min_spare_workers     = delete $args{min_spare_workers}     || 1;
     my $max_spare_workers     = delete $args{max_spare_workers}     || $max_workers;
     my $auto_load_worker      = delete $args{auto_load_worker}      || 1;
+    my $work_delay            = $args{work_delay}                   || 5;
     my $debug                 = delete $args{debug}                 || 0;
 
     my $qudo = Qudo->new(%args);
@@ -27,6 +29,7 @@ sub new {
         max_request_par_child => $max_request_par_child,
         min_spare_workers     => $min_spare_workers,
         max_spare_workers     => $max_spare_workers,
+        work_delay            => $work_delay,
         debug                 => $debug,
         qudo                  => $qudo,
     }, $class;
@@ -70,12 +73,16 @@ sub run {
 
                 my $reqs_before_exit = $self->{max_request_par_child};
 
-                $SIG{TERM} = sub { $reqs_before_exit = 0 };
+                local $SIG{TERM} = sub { $reqs_before_exit = 0 };
 
                 while ($reqs_before_exit > 0) {
-                    if ($manager->work_once) {
+                    if (throttle(0.5, sub { $manager->work_once })) {
+                        $self->debug("WORK $$\n");
                         --$reqs_before_exit
+                    } else {
+                        sleep $self->{work_delay};
                     }
+                    $self->debug("$$ $reqs_before_exit\n")
                 }
             }
 
@@ -85,7 +92,7 @@ sub run {
 
         $pm->wait_all_children;
 
-        kill 'KILL', $c_pid;
+        kill 'TERM', $c_pid;
     } else {
 
         my $admin = IO::Socket::INET->new(
@@ -146,6 +153,7 @@ Qudo::Parallel::Manager - auto control forking manager process.
           username => '',
           password => '',
       }],
+      work_delay             => 3,
       max_workers            => 5,
       min_spare_workers      => 1,
       max_spare_workers      => 5,
