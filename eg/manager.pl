@@ -11,9 +11,11 @@ my $m = Qudo::Parallel::Manager->new(
     }],
     manager_abilities  => [qw/Worker::Test/],
     min_spare_workers  => 10,
-    max_spare_workers  => 50,
+    max_spare_workers  => 20,
     max_workers        => 50,
     work_delay         => 3,
+    max_request_par_child => 2,
+    admin_port         => 90000,
     debug => 1,
 );
 

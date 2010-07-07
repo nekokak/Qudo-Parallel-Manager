@@ -18,6 +18,7 @@ sub new {
     my $max_spare_workers     = delete $args{max_spare_workers}     || $max_workers;
     my $auto_load_worker      = delete $args{auto_load_worker}      || 1;
     my $work_delay            = $args{work_delay}                   || 5;
+    my $admin_port            = delete $args{admin_port}            || 90000;
     my $debug                 = delete $args{debug}                 || 0;
 
     my $qudo = Qudo->new(%args);
@@ -30,6 +31,7 @@ sub new {
         min_spare_workers     => $min_spare_workers,
         max_spare_workers     => $max_spare_workers,
         work_delay            => $work_delay,
+        admin_port            => $admin_port,
         debug                 => $debug,
         qudo                  => $qudo,
     }, $class;
@@ -98,7 +100,7 @@ sub run {
         my $admin = IO::Socket::INET->new(
             Listen    => 5,
             LocalAddr => '127.0.0.1',
-            LocalPort => 90000,
+            LocalPort => $self->{admin_port},
             Proto     => 'tcp',
             Type      => SOCK_STREAM,
             ReuseAddr => 1,

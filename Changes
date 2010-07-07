@@ -1,5 +1,10 @@
 Revision history for Perl extension Qudo::Parallel::Manager
 
+0.02
+   2010-07-06
+        - use Sub::Throttle.
+        - when generate the instance, can specify admin_port.
+
 0.01
    2010-07-05
         - original version
