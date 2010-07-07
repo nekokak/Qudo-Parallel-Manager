@@ -15,6 +15,7 @@ my $m = Qudo::Parallel::Manager->new(
     max_workers        => 50,
     work_delay         => 3,
     max_request_par_child => 2,
+    admin              => 1,
     admin_port         => 90000,
     debug => 1,
 );

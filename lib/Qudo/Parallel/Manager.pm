@@ -18,6 +18,7 @@ sub new {
     my $max_spare_workers     = delete $args{max_spare_workers}     || $max_workers;
     my $auto_load_worker      = delete $args{auto_load_worker}      || 1;
     my $work_delay            = $args{work_delay}                   || 5;
+    my $admin                 = delete $args{admin}                 || 0;
     my $admin_port            = delete $args{admin_port}            || 90000;
     my $debug                 = delete $args{debug}                 || 0;
 
@@ -31,6 +32,7 @@ sub new {
         min_spare_workers     => $min_spare_workers,
         max_spare_workers     => $max_spare_workers,
         work_delay            => $work_delay,
+        admin                 => $admin,
         admin_port            => $admin_port,
         debug                 => $debug,
         qudo                  => $qudo,
@@ -57,61 +59,72 @@ sub run {
     $self->debug("START WORKING : $$\n");
 
     my $pm = $self->pm;
+    my $c_pid = $self->start_admin_port;
 
-    my $c_pid;
-    if ($c_pid = fork) {
+    while ($pm->signal_received ne 'TERM') {
+        $pm->start and next;
 
-        while ($pm->signal_received ne 'TERM') {
-            $pm->start and next;
+        $self->debug("spawn $$\n");
 
-            $self->debug("spawn $$\n");
-
-            {
-                my $manager = $self->{qudo}->manager;
-                for my $dsn ($manager->shuffled_databases) {
-                    my $db = $manager->driver_for($dsn);
-                    $db->reconnect;
-                }
-
-                my $reqs_before_exit = $self->{max_request_par_child};
-
-                local $SIG{TERM} = sub { $reqs_before_exit = 0 };
-
-                while ($reqs_before_exit > 0) {
-                    if (throttle(0.5, sub { $manager->work_once })) {
-                        $self->debug("WORK $$\n");
-                        --$reqs_before_exit
-                    } else {
-                        sleep $self->{work_delay};
-                    }
-                    $self->debug("$$ $reqs_before_exit\n")
-                }
+        {
+            my $manager = $self->{qudo}->manager;
+            for my $dsn ($manager->shuffled_databases) {
+                my $db = $manager->driver_for($dsn);
+                $db->reconnect;
             }
 
-            $self->debug("FINISHED $$\n");
-            $pm->finish;
+            my $reqs_before_exit = $self->{max_request_par_child};
+
+            local $SIG{TERM} = sub { $reqs_before_exit = 0 };
+
+            while ($reqs_before_exit > 0) {
+                if (throttle(0.5, sub { $manager->work_once })) {
+                    $self->debug("WORK $$\n");
+                    --$reqs_before_exit
+                } else {
+                    sleep $self->{work_delay};
+                }
+                $self->debug("$$ $reqs_before_exit\n")
+            }
         }
 
-        $pm->wait_all_children;
+        $self->debug("FINISHED $$\n");
+        $pm->finish;
+    }
 
-        kill 'TERM', $c_pid;
-    } else {
+    $pm->wait_all_children;
 
-        my $admin = IO::Socket::INET->new(
-            Listen    => 5,
-            LocalAddr => '127.0.0.1',
-            LocalPort => $self->{admin_port},
-            Proto     => 'tcp',
-            Type      => SOCK_STREAM,
-            ReuseAddr => 1,
-            ReusePort => 1,
-        ) or die "Cannot open server socket: $!";
+    $self->stop_admin_port($c_pid);
+}
 
-        while (my $remote = $admin->accept) {
-            my $status = join ' ', $pm->scoreboard->get_statuses;
-            $remote->print($status);
-            $remote->close;
-        }
+sub stop_admin_port {
+    my ($self, $pid) = @_;
+    return unless $pid;
+    kill 'TERM', $pid;
+}
+sub start_admin_port {
+    my $self = shift;
+
+    return unless $self->{admin};
+
+    my $pid = fork();
+    die "fork failed: $!" unless defined $pid;
+    return $pid if $pid; # main process
+
+    my $admin = IO::Socket::INET->new(
+        Listen    => 5,
+        LocalAddr => '127.0.0.1',
+        LocalPort => $self->{admin_port},
+        Proto     => 'tcp',
+        Type      => SOCK_STREAM,
+        ReuseAddr => 1,
+        ReusePort => 1,
+    ) or die "Cannot open server socket: $!";
+
+    while (my $remote = $admin->accept) {
+        my $status = join ' ', $self->pm->scoreboard->get_statuses;
+        $remote->print($status);
+        $remote->close;
     }
 }
 
@@ -161,6 +174,7 @@ Qudo::Parallel::Manager - auto control forking manager process.
       max_spare_workers      => 5,
       max_request_par_chiled => 30,
       auto_load_worker       => 1,
+      admin                  => 1,
       debug                  => 1,
   );
   $manager->run; # start fork and work.
