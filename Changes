@@ -1,5 +1,9 @@
 Revision history for Perl extension Qudo::Parallel::Manager
 
+0.03
+   2010-07-08
+        - FIXED: Makefile.pl
+
 0.02
    2010-07-06
         - use Sub::Throttle.
