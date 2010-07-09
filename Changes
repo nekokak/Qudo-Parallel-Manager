@@ -1,5 +1,10 @@
 Revision history for Perl extension Qudo::Parallel::Manager
 
+0.05
+   2010-07-09
+        - FIXED: Makefile.pl
+        - FIXED: no ReusePort.
+
 0.04
    2010-07-08
         - FIXED: do not reuse port.
