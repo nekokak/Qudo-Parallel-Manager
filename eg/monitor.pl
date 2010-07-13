@@ -5,7 +5,7 @@ use IO::Socket::INET;
 
 while (1) {
     my $sock = IO::Socket::INET->new(
-        PeerHost => '127.0.0.1',
+        PeerHost => '192.168.1.17',
         PeerPort => 90000,
         Proto    => 'tcp',
     ) or die 'can not connect admin port.';

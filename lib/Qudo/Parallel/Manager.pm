@@ -7,7 +7,7 @@ use Parallel::Prefork::SpareWorkers qw(:status);
 use Sub::Throttle qw/throttle/;
 use IO::Socket;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 sub new {
     my ($class, %args) = @_;
@@ -19,6 +19,7 @@ sub new {
     my $auto_load_worker      = delete $args{auto_load_worker}      || 1;
     my $work_delay            = $args{work_delay}                   || 5;
     my $admin                 = delete $args{admin}                 || 0;
+    my $admin_host            = delete $args{admin_host}            || 127.0.0.1;
     my $admin_port            = delete $args{admin_port}            || 90000;
     my $debug                 = delete $args{debug}                 || 0;
 
@@ -33,6 +34,7 @@ sub new {
         max_spare_workers     => $max_spare_workers,
         work_delay            => $work_delay,
         admin                 => $admin,
+        admin_host            => $admin_host,
         admin_port            => $admin_port,
         debug                 => $debug,
         qudo                  => $qudo,
@@ -101,6 +103,7 @@ sub stop_admin_port {
     return unless $pid;
     kill 'TERM', $pid;
 }
+
 sub start_admin_port {
     my $self = shift;
 
@@ -112,7 +115,7 @@ sub start_admin_port {
 
     my $admin = IO::Socket::INET->new(
         Listen    => 5,
-        LocalAddr => '127.0.0.1',
+        LocalAddr => $self->{admin_host},
         LocalPort => $self->{admin_port},
         Proto     => 'tcp',
         Type      => SOCK_STREAM,

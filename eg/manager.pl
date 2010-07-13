@@ -16,6 +16,7 @@ my $m = Qudo::Parallel::Manager->new(
     work_delay         => 3,
     max_request_par_child => 2,
     admin              => 1,
+    admin_host         => '192.168.1.17',
     admin_port         => 90000,
     debug => 1,
 );

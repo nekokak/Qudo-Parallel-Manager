@@ -1,5 +1,9 @@
 Revision history for Perl extension Qudo::Parallel::Manager
 
+0.05
+   2010-07-13
+        - MOD: can set admin_host.
+
 0.04
    2010-07-09
         - FIXED: do not reuse port.
