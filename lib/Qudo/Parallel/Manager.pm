@@ -7,7 +7,7 @@ use Parallel::Prefork::SpareWorkers qw(:status);
 use Sub::Throttle qw/throttle/;
 use IO::Socket;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 sub new {
     my ($class, %args) = @_;
@@ -19,7 +19,7 @@ sub new {
     my $auto_load_worker      = delete $args{auto_load_worker}      || 1;
     my $work_delay            = $args{work_delay}                   || 5;
     my $admin                 = delete $args{admin}                 || 0;
-    my $admin_host            = delete $args{admin_host}            || 127.0.0.1;
+    my $admin_host            = delete $args{admin_host}            || '127.0.0.1';
     my $admin_port            = delete $args{admin_port}            || 90000;
     my $debug                 = delete $args{debug}                 || 0;
 
